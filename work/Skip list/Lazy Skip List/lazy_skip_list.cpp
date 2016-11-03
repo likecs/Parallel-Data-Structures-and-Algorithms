@@ -9,38 +9,27 @@
  
 using namespace std;
 
+//denote maximum levels in skip-list
+//should be about O(log n)
+const int MAX_LEVEL = 20;
+
 class LazySkipList {
 private:
-	int MAX_LEVEL = 20;
 	struct node {
 		int data;
 		node **next;
-		omp_lock_t lock;
+		omp_nest_lock_t lock;
 		bool marked, fully_linked;
 		int top_level;
 	};
-	node *create_node(int val) {
-		node *new_node = (node *)malloc(sizeof(node));
-		new_node->data = val;
-		new_node->next = (node **)malloc((MAX_LEVEL + 1) * sizeof(node *));
-		new_node->top_level = MAX_LEVEL;
-		new_node->marked = false;
-		new_node->fully_linked = false;
-		omp_init_lock(&(new_node->lock));
-		for(int i = 0; i <= new_node->top_level; ++i) {
-			new_node->next[i] = NULL;
-		}
-		assert(new_node != NULL);
-		return new_node;
-	}
-	node *create_node(int val, int height) {
+	node *create_node(int val, int height = MAX_LEVEL) {
 		node *new_node = (node *)malloc(sizeof(node));
 		new_node->data = val;
 		new_node->next = (node **)malloc((height + 1) * sizeof(node *));
 		new_node->top_level = height;
 		new_node->marked = false;
 		new_node->fully_linked = false;
-		omp_init_lock(&(new_node->lock));
+		omp_init_nest_lock(&(new_node->lock));
 		for(int i = 0; i <= new_node->top_level; ++i) {
 			new_node->next[i] = NULL;
 		}
@@ -75,15 +64,26 @@ public:
 		tail = create_node(INT_MAX);
 		for(int i = 0; i <= head->top_level; ++i) {
 			head->next[i] = tail;
-			assert(head->next[i] != NULL);
 		}
 	}
 	~LazySkipList() {
+		node *curr = head, *prev;
+		while(curr != NULL) {
+			prev = curr;
+			omp_destroy_nest_lock(&(curr->lock));
+			curr = curr->next[0];
+			free(prev->next);
+			free(prev);
+		}
+	}
+	void print() {
+		printf("Contents: ");
 		node *curr = head;
 		while(curr != NULL) {
-			omp_destroy_lock(&(curr->lock));
+			printf("%d ", curr->data);
 			curr = curr->next[0];
-		}
+		}	
+		printf("\n");
 	}
 	int find(int val, node **preds, node **succs) {
 		int found = -1;
@@ -112,7 +112,6 @@ public:
 		}
 		while(true) {
 			int found = find(val, preds, succs);
-			printf("%d\n", found);
 			if (found != -1) {
 				node *ref = succs[found];
 				if (!(ref->marked)) {
@@ -127,11 +126,14 @@ public:
 			for(int level = 0; valid && (level <= top_level); ++level) {
 				pred = preds[level];
 				succ = succs[level];
-				// omp_set_lock(&(pred->lock));
+				omp_set_nest_lock(&(pred->lock));
 				highest_locked = level;
 				valid = !(pred->marked) && !(succ->marked) && (pred->next[level] == succ);
 			}
 			if (!valid) {
+				for(int level = 0; level <= highest_locked; ++level) {
+					omp_unset_nest_lock(&(preds[level]->lock));
+				}
 				continue;
 			}
 			node *ref = create_node(val, top_level);
@@ -143,7 +145,7 @@ public:
 			}
 			ref->fully_linked = true;
 			for(int level = 0; level <= highest_locked; ++level) {
-				omp_unset_lock(&(preds[level]->lock));
+				omp_unset_nest_lock(&(preds[level]->lock));
 			}
 			return true;
 		}
@@ -166,9 +168,9 @@ public:
 			if (is_marked || (found != -1 && (victim->fully_linked && victim->top_level == found && !(victim->marked)))) {
 				if (!is_marked) {
 					top_level = victim->top_level;
-					omp_set_lock(&(victim->lock));
+					omp_set_nest_lock(&(victim->lock));
 					if (victim->marked) {
-						omp_unset_lock(&(victim->lock));
+						omp_unset_nest_lock(&(victim->lock));
 						return false;
 					}
 					victim->marked = true;
@@ -179,20 +181,25 @@ public:
 				bool valid = true;
 				for(int level = 0; valid && (level <= top_level); ++level) {
 					pred = preds[level];
-					omp_set_lock(&(pred->lock));
+					omp_set_nest_lock(&(pred->lock));
 					highest_locked = level;
 					valid = !(pred->marked) && (pred->next[level] == victim);
 				}
 				if (!valid) {
+					for(int i = 0; i <= highest_locked; ++i) {
+						omp_unset_nest_lock(&(preds[i]->lock));
+					}
 					continue;
 				}
 				for(int level = top_level; level >= 0; --level) {
 					preds[level]->next[level] = victim->next[level];
 				}
-				omp_unset_lock(&(victim->lock));
+				omp_unset_nest_lock(&(victim->lock));
 				for(int i = 0; i <= highest_locked; ++i) {
-					omp_unset_lock(&(preds[i]->lock));
+					omp_unset_nest_lock(&(preds[i]->lock));
 				}
+				free(victim->next);
+				free(victim);
 				return true;
 			}
 			else {
@@ -202,7 +209,7 @@ public:
 	}
 };
 
-int data_set[1001][2];
+int data_set[10001][2];
 
 int main() {
 	LazySkipList skip_list;
@@ -221,18 +228,18 @@ int main() {
 	#pragma omp parallel
 	{
 		bool ans;
-		#pragma omp for schedule(dynamic, 1) private(ans)
+		#pragma omp for schedule(dynamic) private(ans)
 		for(int i = 0; i < ctr; ++i) {
 			if (data_set[i][0] == 1) {
 				ans = skip_list.add(data_set[i][1]);
 			}
 			else {
-				ans = skip_list.add(data_set[i][1]);
+				ans = skip_list.remove(data_set[i][1]);
 			}
-			cout << ans << "\n";
 		}
 	}
 	double finish = omp_get_wtime();
+	skip_list.print();
 	cerr << "Time taken : " << finish - start << "\n";
 	return 0;
 }
