@@ -5,6 +5,7 @@
 #include <cassert>
 #include <climits>
 #include <cmath>
+#include <cstdlib>
 #include <omp.h>
  
 using namespace std;
@@ -18,9 +19,9 @@ private:
 	struct node {
 		int data;
 		node **next;
+		int top_level;
 		omp_nest_lock_t lock;
 		bool marked, fully_linked;
-		int top_level;
 	};
 	node *create_node(int val, int height = MAX_LEVEL) {
 		node *new_node = (node *)malloc(sizeof(node));
@@ -62,7 +63,7 @@ public:
 	LazySkipList() {
 		head = create_node(INT_MIN);
 		tail = create_node(INT_MAX);
-		for(int i = 0; i <= head->top_level; ++i) {
+		for(int i = 0; i < head->top_level; ++i) {
 			head->next[i] = tail;
 		}
 	}
@@ -114,8 +115,21 @@ public:
 			int found = find(val, preds, succs);
 			if (found != -1) {
 				node *ref = succs[found];
-				if (!(ref->marked)) {
-					while(!(ref->fully_linked)) {}
+				bool tmp_fully_linked, tmp_marked;
+				#pragma omp flush
+				#pragma omp atomic read
+					tmp_marked = ref->marked;
+				if (!tmp_marked) {
+					while(1) {
+						#pragma omp flush
+						#pragma omp atomic read
+							tmp_fully_linked = ref->fully_linked;
+						if(tmp_fully_linked) {
+							break;
+						}
+					}
+					#pragma omp flush
+					// while(!(ref->fully_linked)) {}
 					return false;
 				}
 				continue;
@@ -128,7 +142,14 @@ public:
 				succ = succs[level];
 				omp_set_nest_lock(&(pred->lock));
 				highest_locked = level;
-				valid = !(pred->marked) && !(succ->marked) && (pred->next[level] == succ);
+				bool tmp_pred_marked, tmp_succ_marked;
+				#pragma omp flush
+				#pragma omp atomic read
+					tmp_pred_marked = pred->marked;
+				#pragma omp atomic read
+					tmp_succ_marked = succ->marked;
+				valid = !(tmp_pred_marked) && !(tmp_succ_marked) && (pred->next[level] == succ);
+				#pragma omp flush
 			}
 			if (!valid) {
 				for(int level = 0; level <= highest_locked; ++level) {
@@ -143,7 +164,10 @@ public:
 			for(int level = 0; level <= top_level; ++level) {
 				preds[level]->next[level] = ref;
 			}
-			ref->fully_linked = true;
+			#pragma omp flush
+			#pragma omp atomic write
+				ref->fully_linked = true;
+			#pragma omp flush
 			for(int level = 0; level <= highest_locked; ++level) {
 				omp_unset_nest_lock(&(preds[level]->lock));
 			}
@@ -165,15 +189,25 @@ public:
 			if (found != -1) {
 				victim = succs[found];
 			}
+			#pragma omp flush
 			if (is_marked || (found != -1 && (victim->fully_linked && victim->top_level == found && !(victim->marked)))) {
 				if (!is_marked) {
-					top_level = victim->top_level;
+					#pragma omp flush
+					#pragma omp atomic read
+						top_level = victim->top_level;
 					omp_set_nest_lock(&(victim->lock));
-					if (victim->marked) {
+					bool tmp_victim_marked;
+					#pragma omp flush
+					#pragma omp atomic read
+						tmp_victim_marked = victim->marked;
+					if (tmp_victim_marked) {
 						omp_unset_nest_lock(&(victim->lock));
 						return false;
 					}
-					victim->marked = true;
+					#pragma omp flush
+					#pragma omp atomic write
+						victim->marked = true;
+					#pragma omp flush
 					is_marked = true;
 				}
 				int highest_locked = -1;
@@ -183,7 +217,12 @@ public:
 					pred = preds[level];
 					omp_set_nest_lock(&(pred->lock));
 					highest_locked = level;
-					valid = !(pred->marked) && (pred->next[level] == victim);
+					bool tmp_pred_marked;
+					#pragma omp flush
+					#pragma omp atomic read
+						tmp_pred_marked = pred->marked;
+					valid = !(tmp_pred_marked) && (pred->next[level] == victim);
+					#pragma omp flush
 				}
 				if (!valid) {
 					for(int i = 0; i <= highest_locked; ++i) {
