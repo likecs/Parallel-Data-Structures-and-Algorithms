@@ -63,7 +63,7 @@ public:
 	LazySkipList() {
 		head = create_node(INT_MIN);
 		tail = create_node(INT_MAX);
-		for(int i = 0; i < head->top_level; ++i) {
+		for(int i = 0; i <= head->top_level; ++i) {
 			head->next[i] = tail;
 		}
 	}
@@ -129,7 +129,6 @@ public:
 						}
 					}
 					#pragma omp flush
-					// while(!(ref->fully_linked)) {}
 					return false;
 				}
 				continue;
@@ -149,7 +148,6 @@ public:
 				#pragma omp atomic read
 					tmp_succ_marked = succ->marked;
 				valid = !(tmp_pred_marked) && !(tmp_succ_marked) && (pred->next[level] == succ);
-				#pragma omp flush
 			}
 			if (!valid) {
 				for(int level = 0; level <= highest_locked; ++level) {
@@ -222,7 +220,6 @@ public:
 					#pragma omp atomic read
 						tmp_pred_marked = pred->marked;
 					valid = !(tmp_pred_marked) && (pred->next[level] == victim);
-					#pragma omp flush
 				}
 				if (!valid) {
 					for(int i = 0; i <= highest_locked; ++i) {
@@ -234,11 +231,10 @@ public:
 					preds[level]->next[level] = victim->next[level];
 				}
 				omp_unset_nest_lock(&(victim->lock));
+				// free(victim);
 				for(int i = 0; i <= highest_locked; ++i) {
 					omp_unset_nest_lock(&(preds[i]->lock));
 				}
-				free(victim->next);
-				free(victim);
 				return true;
 			}
 			else {
@@ -248,7 +244,7 @@ public:
 	}
 };
 
-int data_set[10001][2];
+int data_set[100001][2];
 
 int main() {
 	LazySkipList skip_list;
