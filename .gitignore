@@ -1,3 +1,6 @@
 *.in
 *.out
+linked_list
+mergesort_parallel
+mergesort_sequential
 
