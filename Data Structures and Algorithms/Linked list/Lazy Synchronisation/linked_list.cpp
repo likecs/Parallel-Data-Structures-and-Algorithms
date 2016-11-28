@@ -103,14 +103,16 @@ bool contains(node *head, int val) {
 }
 
 void free_locks(node *head) {
-	node *curr = head;
+	node *curr = head, *delme;
 	while(curr != NULL) {
+		delme = curr;
 		omp_destroy_lock(&(curr->lock));
 		curr = curr->next;
+		free(delme);
 	}
 }
 
-int data_set[100001][2];
+int data_set[1000001][2];
 
 int main() {
 	node *root = create_node(INT_MIN);

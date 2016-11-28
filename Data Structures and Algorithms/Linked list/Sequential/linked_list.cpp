@@ -62,7 +62,16 @@ node* remove(node *head, int val) {
 	return head;
 }
 
-int data_set[100001][2];
+void free_list(node *head) {
+	node *curr = head, *delme;
+	while(curr != NULL) {
+		delme = curr;
+		curr = curr->next;
+		free(delme);
+	}
+}
+
+int data_set[1000001][2];
 
 int main() {
 	node *root = create_node(INT_MIN);
@@ -88,6 +97,7 @@ int main() {
 			root = remove(root, data_set[i][1]);
 		}
 	}
+	free_list(root);
 	double finish = omp_get_wtime();
 	print_list(root);
 	cerr << "Sequential time taken : " << finish - start << "\n";
