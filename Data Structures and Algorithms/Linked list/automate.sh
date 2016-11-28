@@ -12,7 +12,7 @@ i=1
 while [ $counter -gt 0 ]; do
 	./Generators/test_generator > ./Generators/inp$2/$i'.in' $2
 	
-	timeout 50s ./Sequential/linked_list < ./Generators/inp$2/$i'.in' > ./Sequential/out$2/$i'.out'
+	timeout 5s ./Sequential/linked_list < ./Generators/inp$2/$i'.in' > ./Sequential/out$2/$i'.out'
 	if [[ $? -ne 0 ]]; then
 		echo error
 	else

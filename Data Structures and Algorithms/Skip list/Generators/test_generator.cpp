@@ -11,6 +11,7 @@ using namespace std;
 const int mod = 20;
 
 int main() {
+	srand(unsigned(time(NULL)));
 	int operations = 10000;
 	int insert_count = 0;
 	int remove_count = 0;
