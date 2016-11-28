@@ -14,7 +14,7 @@ int main() {
 	double start_time = omp_get_wtime();
 	for(int i = 1; i < n; i <<= 1) {
 		int step = i << 1;
-		#pragma omp parallel for schedule(guided)
+		#pragma omp parallel for schedule(static)
 		for(int j = 0; j < n; j += step) {
 			int start = j, finish = min(n, j + step);
 			int length = finish - start;
@@ -50,8 +50,8 @@ int main() {
 		sorted &= (data_set[i] >= data_set[i-1]);
 	}
 	if (sorted) {
-		printf("Array is sorted\n");
-		printf("Time taken : %lf\n", end_time - start_time);
+		printf("Array is sorted.\n");
+		printf("Parallel Time taken : %lf\n", end_time - start_time);
 	}
 	else {
 		printf("Error in sorting\n");
