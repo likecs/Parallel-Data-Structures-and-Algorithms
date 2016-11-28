@@ -84,17 +84,11 @@ node* remove(node *head, int val) {
 		if (validate(head, prev, curr)) {
 			if (curr->data == val) {
 				prev->next = curr->next;
-				omp_unset_lock(&(prev->lock));
-				omp_unset_lock(&(curr->lock));
-				free(curr);
 			}
-			else {
-				omp_unset_lock(&(prev->lock));
-				omp_unset_lock(&(curr->lock));
-			}
+			omp_unset_lock(&(prev->lock));
+			omp_unset_lock(&(curr->lock));
 			return head;
 		}
-		assert(curr != NULL);
 		omp_unset_lock(&(prev->lock));
 		omp_unset_lock(&(curr->lock));
 	}
@@ -128,7 +122,7 @@ void free_locks(node *head) {
 	}
 }
 
-int data_set[10001][2];
+int data_set[100001][2];
 
 int main() {
 	node *root = create_node(INT_MIN);
@@ -161,6 +155,6 @@ int main() {
 	free_locks(root);
 	double finish = omp_get_wtime();
 	print_list(root);
-	cerr << "Time taken : " << finish - start << "\n";
+	cerr << "Optimistic time taken : " << finish - start << "\n";
 	return 0;
 }

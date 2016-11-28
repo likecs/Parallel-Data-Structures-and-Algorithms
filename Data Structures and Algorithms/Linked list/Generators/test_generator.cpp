@@ -2,16 +2,17 @@
 #include <fstream>
 #include <cstdio>
 #include <cstring>
-#include <malloc.h>
 #include <cassert>
-#include <cmath>
+#include <ctype.h>
+#include <stdlib.h>
  
 using namespace std;
 
-const int mod = 20;
+const int mod = 500;
 
-int main() {
-	int operations = 10000;
+int main(int argc, char const *argv[]) {
+	srand(unsigned(time(NULL)));
+	int operations = atoi(argv[1]);
 	int insert_count = 0;
 	int remove_count = 0;
 	int type, num;

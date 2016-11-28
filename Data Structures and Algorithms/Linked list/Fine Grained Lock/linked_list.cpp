@@ -87,7 +87,7 @@ void free_locks(node *head) {
 	}
 }
 
-int data_set[10001][2];
+int data_set[100001][2];
 
 int main() {
 	node *root = create_node(INT_MIN);
